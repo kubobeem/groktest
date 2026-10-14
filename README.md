@@ -1,29 +1,21 @@
-# groktest — mini-AI v0.3 WebGPU デモ
+# groktest — mini-AI v0.3（GitHub Pages）
 
-ゼロから学習した超小型日本語チャットを、ブラウザ上で **WebGPU / WASM（wllama）** で動かすデモです。
+ブラウザだけで動く WebGPU / WASM デモです。モデルは Hugging Face から読み込みます。
 
-## モデル（Hugging Face）
+## デモ
 
-- **https://huggingface.co/kubobeem/testmodeler**
-- ファイル: `mini-ai-v0.3-f16.gguf`（約 2.2 MB）
+**https://kubobeem.github.io/groktest/**
 
-デモ画面の **「Hugging Face から読込」** でそのまま使えます。
+1. 「Hugging Face から読込」を押す  
+2. チャットする
 
-## すぐ試す
+モデル: [kubobeem/testmodeler](https://huggingface.co/kubobeem/testmodeler)（`mini-ai-v0.3-f16.gguf`）
 
-```bash
-git clone https://github.com/kubobeem/groktest.git
-cd groktest
-python3 serve.py
-# → http://127.0.0.1:8080/
-```
+## Pages の有効化（初回のみ）
 
-1. 「Hugging Face から読込」をクリック
-2. サンプル質問 or 自由入力
-
-Chrome / Edge 推奨。
+Repository → **Settings** → **Pages** → Source: **Deploy from a branch** → Branch: `main` / `/ (root)` → Save
 
 ## 技術
 
-- [wllama](https://github.com/ngxson/wllama) v3
-- モデル本体は HF、UI はこのリポジトリ
+- [wllama](https://github.com/ngxson/wllama)（ブラウザ内推論）
+- モデルは HF、UI は GitHub Pages のみ
