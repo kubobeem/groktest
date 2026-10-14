@@ -7,13 +7,30 @@
 | ファイル | 説明 |
 |---------|------|
 | `index.html` | チャット UI（@wllama/wllama + WebGPU） |
-| `mini-ai-v0.3-f16.gguf` | 学習済みモデル（約 2.2 MB, Llama アーキテクチャ, f16） |
 | `serve.py` | COOP/COEP 付きローカルサーバ（マルチスレッド用） |
+| `mini-ai-v0.3-f16.gguf` | **別途配置**（約 2.2 MB）。下記参照 |
+
+## GGUF の置き方
+
+モデル本体はバイナリのため、次のいずれかで用意してください。
+
+1. ローカルで UI を開いたあと、画面左のファイル選択から `.gguf` を読み込む（推奨）
+2. このリポジトリに `mini-ai-v0.3-f16.gguf` を追加してコミットする
+
+```bash
+# 例: 手元に gguf がある場合
+cp /path/to/mini-ai-v0.3-f16.gguf .
+git add mini-ai-v0.3-f16.gguf
+git commit -m "Add mini-ai model"
+git push
+```
 
 ## すぐ試す
 
 ```bash
-# このディレクトリで
+git clone https://github.com/kubobeem/groktest.git
+cd groktest
+# gguf を同じフォルダに置いてから
 python3 serve.py
 # → http://127.0.0.1:8080/
 ```
@@ -35,9 +52,10 @@ Chrome / Edge 推奨。WebGPU が使えると `n_gpu_layers` で GPU オフロ�
 答え：
 ```
 
-## GitHub Pages で公開する場合
+## GitHub Pages
 
-Pages では任意ヘッダを付けにくいため、マルチスレッド（SharedArrayBuffer）が無効になることがあります。それでも **単一スレッド WASM** で動作します。GGUF はリポジトリに含めるか、Release アセットからダウンロードしてローカル選択してください。
+Settings → Pages → Deploy from branch `main` / root で公開できます。
+Pages では COOP/COEP が付かないためマルチスレッドは無効ですが、単一スレッド WASM で動作します。
 
 ## 技術
 
