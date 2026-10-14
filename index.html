@@ -1,1 +1,265 @@
-<PLACEHOLDER>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mini-AI v0.3 — WebGPU Chat</title>
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e8eaed;
+      --muted: #9aa3b2; --accent: #6ea8fe; --accent2: #3dd68c;
+      --user: #1e293b; --bot: #1a2332; --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--panel);
+      display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; }
+    header h1 { margin: 0; font-size: 1.15rem; }
+    header h1 span { color: var(--accent); font-weight: 400; font-size: .9rem; }
+    .badge { display: inline-flex; padding: .25rem .6rem; border-radius: 999px; font-size: .75rem;
+      background: #1f2937; color: var(--muted); border: 1px solid var(--border); }
+    .badge.on { color: var(--accent2); border-color: #2f6b4f; background: #13261c; }
+    .badge.off { color: var(--danger); border-color: #5c2a2a; background: #2a1515; }
+    main { flex: 1; display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+    @media (max-width: 800px) { main { grid-template-columns: 1fr; } aside { max-height: 45vh; border-bottom: 1px solid var(--border); } }
+    aside { background: var(--panel); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 1rem; }
+    .section-title { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .4rem; }
+    label.row { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); }
+    input[type=file], input[type=text], input[type=number], input[type=range] {
+      width: 100%; padding: .5rem .65rem; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: .9rem; }
+    button { border: none; border-radius: 8px; padding: .55rem .9rem; font-size: .9rem; cursor: pointer;
+      background: var(--accent); color: #0b1220; font-weight: 600; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+    .samples { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .samples button { background: #1f2937; color: var(--text); font-weight: 400; font-size: .78rem; padding: .35rem .55rem; }
+    .chat-wrap { display: flex; flex-direction: column; min-height: 0; }
+    #messages { flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: .85rem; }
+    .msg { max-width: 720px; padding: .75rem 1rem; border-radius: 12px; line-height: 1.55; font-size: .95rem;
+      white-space: pre-wrap; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: var(--user); border: 1px solid var(--border); }
+    .msg.bot { align-self: flex-start; background: var(--bot); border: 1px solid #243044; }
+    .msg.sys { align-self: center; background: transparent; color: var(--muted); font-size: .82rem; border: none; text-align: center; }
+    .composer { border-top: 1px solid var(--border); padding: .85rem 1rem; display: flex; gap: .6rem; background: var(--panel); }
+    .composer input { flex: 1; padding: .7rem .9rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 1rem; }
+    .status { font-size: .8rem; color: var(--muted); min-height: 1.2em; }
+    .progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; display: none; margin-top: .5rem; }
+    .progress > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .15s ease; }
+    .hint { font-size: .78rem; color: var(--muted); line-height: 1.45; }
+    a { color: var(--accent); } code { font-size: .85em; color: #c4d0e0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>mini-AI v0.3 <span>from-scratch · GGUF · WebGPU / WASM</span></h1>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      <span id="gpuBadge" class="badge off">WebGPU: —</span>
+      <span id="modelBadge" class="badge">モデル未読込</span>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div>
+        <div class="section-title">モデル</div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem;">
+          <button id="btnLoadHF" type="button">Hugging Face から読込</button>
+          <button id="btnUnload" class="secondary" disabled>解放</button>
+        </div>
+        <p class="hint">モデル: <a href="https://huggingface.co/kubobeem/testmodeler" target="_blank" rel="noopener">kubobeem/testmodeler</a>
+          (<code>mini-ai-v0.3-f16.gguf</code> · 約 2.2 MB)</p>
+        <label class="row" style="margin-top:.5rem;">またはローカル GGUF
+          <input type="file" id="fileInput" accept=".gguf" />
+        </label>
+        <div style="margin-top:.4rem;"><button id="btnLoadFile" disabled>ローカルを読込</button></div>
+        <div class="progress" id="progress"><div id="progressBar"></div></div>
+        <p class="status" id="status">「Hugging Face から読込」を押してください</p>
+      </div>
+      <div>
+        <div class="section-title">推論設定</div>
+        <label class="row">n_gpu_layers（0=CPU）
+          <input type="number" id="gpuLayers" value="99" min="0" max="999" />
+        </label>
+        <label class="row" style="margin-top:.5rem;">temperature
+          <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.3" />
+          <span id="tempVal">0.30</span>
+        </label>
+        <label class="row" style="margin-top:.5rem;">max tokens
+          <input type="number" id="maxTokens" value="64" min="8" max="256" />
+        </label>
+      </div>
+      <div>
+        <div class="section-title">サンプル質問</div>
+        <div class="samples" id="samples"></div>
+      </div>
+      <div class="hint">Chrome / Edge 推奨。マルチスレッドは <code>serve.py</code> の COOP/COEP 付き配信で有効。</div>
+    </aside>
+    <div class="chat-wrap">
+      <div id="messages">
+        <div class="msg sys">「Hugging Face から読込」でモデルを取得してからチャットできます。</div>
+      </div>
+      <div class="composer">
+        <input id="input" type="text" placeholder="質問を入力…（例: ねこの鳴き声は？）" disabled />
+        <button id="btnSend" disabled>送信</button>
+      </div>
+    </div>
+  </main>
+  <script type="module">
+    import { Wllama } from "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.8.1/esm/index.js";
+    const CONFIG_PATHS = { default: "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.8.1/esm/wasm/wllama.wasm" };
+    const HF_REPO = "kubobeem/testmodeler";
+    const HF_FILE = "mini-ai-v0.3-f16.gguf";
+    const HF_URL = `https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}`;
+    const SAMPLES = ["こんにちは","あなたは誰？","日本の首都は？","ねこの鳴き声は？","3たす4は？","7かける8は？","「ぽんぽこ」と言って","春の次は？","大きいの反対は？","ダジャレを言って","今日の夕飯どうしよう","量子力学について教えて"];
+    const el = (id) => document.getElementById(id);
+    const messages = el("messages"), status = el("status"), progress = el("progress"), progressBar = el("progressBar");
+    const gpuBadge = el("gpuBadge"), modelBadge = el("modelBadge"), fileInput = el("fileInput");
+    const btnLoadFile = el("btnLoadFile"), btnUnload = el("btnUnload"), btnSend = el("btnSend");
+    const btnLoadHF = el("btnLoadHF"), input = el("input"), temp = el("temp"), tempVal = el("tempVal");
+    const maxTokens = el("maxTokens"), gpuLayers = el("gpuLayers");
+    let wllama = null, busy = false;
+
+    (async () => {
+      try {
+        if (navigator.gpu) {
+          const a = await navigator.gpu.requestAdapter();
+          gpuBadge.textContent = a ? "WebGPU: 利用可" : "WebGPU: adapter なし";
+          gpuBadge.className = a ? "badge on" : "badge off";
+        } else { gpuBadge.textContent = "WebGPU: 非対応"; gpuBadge.className = "badge off"; }
+      } catch { gpuBadge.textContent = "WebGPU: エラー"; gpuBadge.className = "badge off"; }
+    })();
+
+    for (const q of SAMPLES) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = q;
+      b.onclick = () => { if (busy || !wllama) return; input.value = q; send(); };
+      el("samples").appendChild(b);
+    }
+    temp.oninput = () => { tempVal.textContent = Number(temp.value).toFixed(2); };
+    fileInput.onchange = () => {
+      btnLoadFile.disabled = !fileInput.files?.length;
+      if (fileInput.files?.[0]) status.textContent = `選択中: ${fileInput.files[0].name}`;
+    };
+
+    function addMsg(role, text) {
+      const d = document.createElement("div");
+      d.className = `msg ${role}`; d.textContent = text;
+      messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+      return d;
+    }
+    function setBusy(v) {
+      busy = v;
+      btnSend.disabled = v || !wllama; input.disabled = v || !wllama;
+      btnLoadFile.disabled = v || !fileInput.files?.length;
+      btnLoadHF.disabled = v; btnUnload.disabled = v || !wllama;
+    }
+    function buildPrompt(q) { return `質問：${q}\n答え：`; }
+
+    async function ensureWllama() {
+      if (wllama) { try { await wllama.exit(); } catch (_) {} wllama = null; }
+      wllama = new Wllama(CONFIG_PATHS, {
+        logger: { debug: () => {}, log: (...a) => console.log("[wllama]", ...a),
+          warn: (...a) => console.warn("[wllama]", ...a), error: (...a) => console.error("[wllama]", ...a) },
+      });
+      try { wllama.setCompat("default"); } catch (_) {}
+      return wllama;
+    }
+    function loadOpts(nGpu) {
+      return {
+        n_ctx: 128, n_batch: 128, n_gpu_layers: nGpu,
+        progressCallback: ({ loaded, total }) => {
+          if (total > 0) {
+            const p = Math.round((loaded / total) * 100);
+            progressBar.style.width = `${Math.max(10, p)}%`;
+            status.textContent = `読込 ${p}%`;
+          }
+        },
+      };
+    }
+    async function finishLoad(name) {
+      progressBar.style.width = "100%";
+      modelBadge.textContent = name; modelBadge.className = "badge on";
+      status.textContent = "準備完了 — チャットできます";
+      addMsg("sys", `モデルを読み込みました: ${name}`);
+      setBusy(false);
+      setTimeout(() => { progress.style.display = "none"; progressBar.style.width = "0%"; }, 400);
+    }
+    function failLoad(err) {
+      console.error(err);
+      status.textContent = "読込失敗: " + (err?.message || err);
+      modelBadge.textContent = "読込失敗"; modelBadge.className = "badge off";
+      addMsg("sys", "エラー: " + (err?.message || err));
+      wllama = null; setBusy(false);
+      setTimeout(() => { progress.style.display = "none"; progressBar.style.width = "0%"; }, 400);
+    }
+
+    async function loadModelFromHF() {
+      setBusy(true); status.textContent = "Hugging Face からダウンロード中…";
+      progress.style.display = "block"; progressBar.style.width = "10%";
+      try {
+        await ensureWllama();
+        const nGpu = Math.max(0, parseInt(gpuLayers.value || "99", 10));
+        status.textContent = `HF: ${HF_REPO}/${HF_FILE}`;
+        if (typeof wllama.loadModelFromHF === "function") {
+          await wllama.loadModelFromHF({ repo: HF_REPO, file: HF_FILE }, loadOpts(nGpu));
+        } else {
+          await wllama.loadModelFromUrl(HF_URL, loadOpts(nGpu));
+        }
+        await finishLoad(`${HF_REPO}/${HF_FILE}`);
+      } catch (err) { failLoad(err); }
+    }
+
+    async function loadModelFromFiles(files) {
+      setBusy(true); status.textContent = "ローカル読込中…";
+      progress.style.display = "block"; progressBar.style.width = "5%";
+      try {
+        await ensureWllama();
+        const nGpu = Math.max(0, parseInt(gpuLayers.value || "99", 10));
+        await wllama.loadModel(Array.from(files), loadOpts(nGpu));
+        await finishLoad(files[0]?.name || "GGUF");
+      } catch (err) { failLoad(err); }
+    }
+
+    btnLoadHF.onclick = () => loadModelFromHF();
+    btnLoadFile.onclick = async () => { if (fileInput.files?.length) await loadModelFromFiles(fileInput.files); };
+    btnUnload.onclick = async () => {
+      if (!wllama) return; setBusy(true);
+      try { await wllama.exit(); } catch (_) {}
+      wllama = null; modelBadge.textContent = "モデル未読込"; modelBadge.className = "badge";
+      status.textContent = "解放しました"; addMsg("sys", "モデルを解放しました");
+      setBusy(false); btnSend.disabled = true; input.disabled = true; btnUnload.disabled = true;
+    };
+
+    async function send() {
+      const q = input.value.trim();
+      if (!q || !wllama || busy) return;
+      input.value = ""; addMsg("user", q);
+      const botEl = addMsg("bot", "…"); setBusy(true);
+      try {
+        let out = "";
+        await wllama.createCompletion({
+          prompt: buildPrompt(q), max_tokens: parseInt(maxTokens.value || "64", 10),
+          temperature: Number(temp.value), top_p: 0.9,
+          stop: ["</s>", "質問：", "\n質問"], stream: true,
+          onData: (chunk) => {
+            out += chunk?.choices?.[0]?.text ?? "";
+            botEl.textContent = out || "…"; messages.scrollTop = messages.scrollHeight;
+          },
+        });
+        let text = out.replace(/<\/s>/g, "").trim();
+        if (text.startsWith("答え：")) text = text.slice(3).trim();
+        botEl.textContent = text || "(空の応答)";
+      } catch (err) {
+        console.error(err); botEl.textContent = "エラー: " + (err?.message || err);
+      }
+      setBusy(false); input.focus();
+    }
+    btnSend.onclick = send;
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+  </script>
+</body>
+</html>
